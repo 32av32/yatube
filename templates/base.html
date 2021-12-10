@@ -13,6 +13,7 @@
 
 <body>
     <main>
+        {% include 'nav.html' %}
         <div class="container">
             <h1>{% block header %}The Last Social Media You'll Ever Need{% endblock %}</h1>
             {% block content %}
@@ -20,5 +21,6 @@
             {% endblock %}
         </div>
     </main>
+    {% include 'footer.html' %}
 </body>
 </html>
