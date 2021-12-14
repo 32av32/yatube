@@ -1,16 +1,12 @@
-<!DOCTYPE html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Записи сообщества {{ group.title }} | Yatube</title>
-  </head>
-  <body>
+{% extends 'base.html' %}
+{% block title %}Записи сообщества {{ group.title }} | Yatube{% endblock %}
+{% block header %}Записи сообщества {{ group.title }} | Yatube{% endblock %}
+{% block content %}
     <h1>{{ group.title }}</h1>
     <p>
         {{ group.description }}
     </p>
-    {% for post in posts %}
+    {% for post in page %}
       <h3>
         Автор: {{ post.author.get_full_name }}, дата публикации: {{ post.pub_date|date:"d M Y" }}
       </h3>
@@ -21,5 +17,7 @@
         <hr>
       {% endif %}
     {% endfor %}
-  </body>
-</html>
+    {% if page.has_other_pages %}
+      {% include 'paginator.html' with page=page paginator=paginator %}
+    {% endif %}
+{% endblock %}
