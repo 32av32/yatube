@@ -6,7 +6,11 @@
 <div class="row justify-content-center">
     <div class="col-md-8 p-5">
         <div class="card">
-            <div class="card-header">Новая запись</div>
+            {% if post_id %}
+                <div class="card-header">Редактировать запись</div>
+            {% else %}
+                <div class="card-header">Новая запись</div>
+            {% endif %}
             <div class="card-body">
 
                 {% for error in form.errors %}
@@ -15,7 +19,11 @@
                     </div>
                 {% endfor %}
 
-                <form method="post" action="{% url 'new_post' %}">
+                {% if post_id %}
+                    <form method="post" action="{% url 'post_edit' username=username post_id=post_id %}">
+                {% else %}
+                    <form method="post" action="{% url 'new_post' %}">
+                {% endif %}
                     {% csrf_token %}
                     {% for field in form %}
                         <div class="form-group row" aria-required={% if field.field.required %}"true"{% else %}"false"{% endif %}>
@@ -35,7 +43,11 @@
 
                     <div class="col-md-6 offset-md-4">
                             <button type="submit" class="btn btn-primary">
-                                Создать запись
+                                {% if post_id %}
+                                    Редактировать запись
+                                {% else %}
+                                    Создать запись
+                                {% endif %}
                             </button>
                     </div>
                 </form>
