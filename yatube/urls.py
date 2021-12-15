@@ -16,13 +16,19 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from yatube import settings
+from django.contrib.flatpages import views as fp_views
 
 urlpatterns = [
     path('', include('posts.urls')),
     path('auth/', include('users.urls')),
     path('auth/', include('django.contrib.auth.urls')),
     path('admin/', admin.site.urls),
+    path('about/', include('django.contrib.flatpages.urls'))
+]
 
+urlpatterns += [
+    path('about-us/', fp_views.flatpage, {'url': '/about-us/'}, name='about_us'),
+    path('technology/', fp_views.flatpage, {'url': '/technology/'}, name='technology'),
 ]
 
 if settings.DEBUG:
