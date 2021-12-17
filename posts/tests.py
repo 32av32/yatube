@@ -89,3 +89,7 @@ class TestPost(TestCase):
         self.assertRedirects(response=response, expected_url=f'/auth/login/?next=/{self.user.username}/{1}/edit/',
                              status_code=302, target_status_code=200, fetch_redirect_response=True,
                              msg_prefix='Guest must be redirected to login page')
+
+    def test_page_not_found(self):
+        response = self.client.get('/none_exist_page/')
+        self.assertEquals(response.status_code, 404, msg='response do not return 404 status code')

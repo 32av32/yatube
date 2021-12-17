@@ -62,7 +62,7 @@ def post_edit(request, username: str, post_id: int):
     return redirect('post', username=username, post_id=post_id)
 
 def page_not_found(request, exception):
-    return render(request, 'misc/404.html', {'path', request.path}, status=404)
+    return render(request, 'misc/404.html', {'path': request.path}, status=404)
 
 def server_error(request):
     return render(request, 'misc/500.html', status=500)
