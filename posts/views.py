@@ -1,5 +1,4 @@
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
 from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
@@ -17,7 +16,7 @@ def index(request):
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    posts = Post.objects.filter(group=group).select_related('author').order_by('-pub_date')[:12]
+    posts = Post.objects.filter(group=group).select_related('author').order_by('-pub_date')
     paginator = Paginator(posts, 10)
     page = paginator.get_page(request.GET.get('page'))
     return render(request, 'group.html', {'group': group, 'page': page, 'paginator': paginator})
@@ -36,7 +35,7 @@ def new_post(request):
 
 def profile(request, username: str):
     user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=user.pk).select_related('author', 'group')
+    posts = Post.objects.filter(author=user.pk).select_related('author', 'group').order_by('-pub_date')
     paginator = Paginator(posts, 10)
     page = paginator.get_page(request.GET.get('page'))
     return render(request, 'profile.html', {'author': user, 'page': page, 'paginator': paginator})
@@ -51,12 +50,19 @@ def post_view(request, username: str, post_id: int):
 @login_required
 def post_edit(request, username: str, post_id: int):
     if username == request.user.username:
+        post = Post.objects.select_related('author', 'group').get(id=post_id)
         if request.method == 'POST':
-            form = PostForm(request.POST, instance=Post.objects.get(id=post_id))
+            form = PostForm(request.POST, instance=post)
             if form.is_valid():
                 form.save()
-                return redirect('profile', username=username)
-            return render(request, 'post.html', {'form': form})
+                return redirect('post', username=username, post_id=post_id)
+            return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
         form = PostForm(instance=Post.objects.get(id=post_id))
-        return render(request, 'new.html', {'form': form, 'username': username, 'post_id': post_id})
-    return redirect('profile', username=username)
+        return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
+    return redirect('post', username=username, post_id=post_id)
+
+def page_not_found(request, exception):
+    return render(request, 'misc/404.html', {'path', request.path}, status=404)
+
+def server_error(request):
+    return render(request, 'misc/500.html', status=500)
