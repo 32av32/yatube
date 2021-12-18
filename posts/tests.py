@@ -1,3 +1,5 @@
+from django.urls import reverse
+
 from yatube import settings
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
@@ -63,22 +65,32 @@ class TestPost(TestCase):
 
     def test_existence_created_post(self):
         self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
-        response = self.client.get('/')
-        self.assertContains(response, 'test_text', msg_prefix='Created post do not existence in main page')
-        response = self.client.get(f'/{self.user.username}/')
-        self.assertContains(response, 'test_text', msg_prefix='Created post do not existence in profile page')
-        response = self.client.get(f'/{self.user.username}/{1}/')
-        self.assertContains(response, 'test_text', msg_prefix='Created post do not existence in post page')
+
+        urls = [
+            reverse('index'),
+            reverse('group', kwargs={'slug': self.group_slug}),
+            reverse('profile', kwargs={'username': self.user.username}),
+            reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
+        ]
+
+        for url in urls:
+            response = self.client.get(url)
+            self.assertContains(response, 'test_text', msg_prefix=f'Created post do not exist in url: {url}')
 
     def test_post_edit_auth(self):
         self.auth_client.post('/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
-        self.auth_client.post(f'/{self.user.username}/{1}/edit/', {'text': 'new_text'})
-        response = self.client.get('/')
-        self.assertContains(response, 'new_text', msg_prefix='Edited text do not existence in main page')
-        response = self.client.get(f'/{self.user.username}/')
-        self.assertContains(response, 'new_text', msg_prefix='Edited text do not existence in profile page')
-        response = self.client.get(f'/{self.user.username}/{1}/')
-        self.assertContains(response, 'new_text', msg_prefix='Edited text do not existence in post page')
+        self.auth_client.post(f'/{self.user.username}/{1}/edit/', {'text': 'new_text', 'group': self.group_id})
+
+        urls = [
+            reverse('index'),
+            reverse('group', kwargs={'slug': self.group_slug}),
+            reverse('profile', kwargs={'username': self.user.username}),
+            reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
+        ]
+
+        for url in urls:
+            response = self.client.get(url)
+            self.assertContains(response, 'new_text', msg_prefix=f'Edited text do not exist in url: {url}')
 
     def test_post_edit_guest(self):
         response = self.client.get(f'/{self.user.username}/{1}/edit/')
@@ -93,3 +105,21 @@ class TestPost(TestCase):
     def test_page_not_found(self):
         response = self.client.get('/none_exist_page/')
         self.assertEquals(response.status_code, 404, msg='response do not return 404 status code')
+
+    def test_display_image(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        with open(r'E:\practice\yatube\trash\image.jpg', 'rb') as img:
+            self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': img})
+
+            urls = [
+                reverse('index'),
+                reverse('group', kwargs={'slug': self.group_slug}),
+                reverse('profile', kwargs={'username': self.user.username}),
+                reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
+            ]
+
+            for url in urls:
+                response = self.client.get(url)
+                self.assertContains(response, '<img', msg_prefix=f'Image do not uploaded to url: {url}')
