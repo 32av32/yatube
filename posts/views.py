@@ -3,7 +3,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
 from .models import Post, Group, Comment
-from .forms import PostForm
+from .forms import PostForm, CommentForm
 
 User = get_user_model()
 
@@ -36,6 +36,18 @@ def new_post(request):
     return render(request, 'new.html', {'form': form})
 
 
+@login_required
+def add_comment(request, username: str, post_id: int):
+    form = CommentForm(request.POST or None)
+    if request.method == 'POST':
+        if form.is_valid():
+            form.instance.post = Post.objects.select_related('author', 'group').get(id=post_id)
+            form.instance.author = request.user
+            form.save()
+            return redirect('post', username=username, post_id=post_id)
+        return redirect('post', username=username, post_id=post_id, form=form)
+
+
 def profile(request, username: str):
     user = get_object_or_404(User, username=username)
     posts = Post.objects.filter(author=user.pk).select_related('author', 'group').order_by('-pub_date')
@@ -44,13 +56,10 @@ def profile(request, username: str):
     return render(request, 'profile.html', {'author': user, 'page': page, 'paginator': paginator})
 
 
-def post_view(request, username: str, post_id: int):
-    post = get_object_or_404(Post, id=post_id)
-    user = get_object_or_404(User, username=username)
-    posts_count = Post.objects.filter(author=user.pk).count()
-    comments = Comment.objects.filter(post=post_id).select_related('author', 'post')
-    return render(request, 'post.html',
-                  {'author': user, 'post': post, 'posts_count': posts_count, 'comments': comments})
+def post_view(request, username: str, post_id: int, form=CommentForm()):
+    post = get_object_or_404(User, username=username).posts.select_related('author',).get(id=post_id)
+    comments = post.comments.select_related('author', ).all()
+    return render(request, 'post.html', {'post': post, 'comments': comments, 'form': form})
 
 
 @login_required
@@ -65,12 +74,6 @@ def post_edit(request, username: str, post_id: int):
             return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
         return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
     return redirect('post', username=username, post_id=post_id)
-
-@login_required
-def add_comment(request, username: str, post_id: int):
-    post = get_object_or_404(Post, id=post_id)
-
-
 
 
 def page_not_found(request, exception):
