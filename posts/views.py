@@ -9,7 +9,7 @@ User = get_user_model()
 
 
 def index(request):
-    posts = Post.objects.all().select_related('author').order_by('-pub_date')
+    posts = Post.objects.all().select_related('author', 'group').order_by('-pub_date')
     paginator = Paginator(posts, 10)
     page = paginator.get_page(request.GET.get('page'))
 
@@ -22,30 +22,6 @@ def group_posts(request, slug):
     paginator = Paginator(posts, 10)
     page = paginator.get_page(request.GET.get('page'))
     return render(request, 'group.html', {'group': group, 'page': page, 'paginator': paginator})
-
-
-@login_required
-def new_post(request):
-    form = PostForm(request.POST or None, files=request.FILES or None)
-    if request.method == 'POST':
-        if form.is_valid():
-            form.instance.author = request.user
-            form.save()
-            return redirect('index')
-        return render(request, 'new.html', {'form': form})
-    return render(request, 'new.html', {'form': form})
-
-
-@login_required
-def add_comment(request, username: str, post_id: int):
-    form = CommentForm(request.POST or None)
-    if request.method == 'POST':
-        if form.is_valid():
-            form.instance.post = Post.objects.select_related('author', 'group').get(id=post_id)
-            form.instance.author = request.user
-            form.save()
-            return redirect('post', username=username, post_id=post_id)
-        return redirect('post', username=username, post_id=post_id, form=form)
 
 
 def profile(request, username: str):
@@ -63,6 +39,18 @@ def post_view(request, username: str, post_id: int, form=CommentForm()):
 
 
 @login_required
+def new_post(request):
+    form = PostForm(request.POST or None, files=request.FILES or None)
+    if request.method == 'POST':
+        if form.is_valid():
+            form.instance.author = request.user
+            form.save()
+            return redirect('index')
+        return render(request, 'new.html', {'form': form})
+    return render(request, 'new.html', {'form': form})
+
+
+@login_required
 def post_edit(request, username: str, post_id: int):
     if username == request.user.username:
         post = Post.objects.select_related('author', 'group').get(id=post_id)
@@ -73,6 +61,19 @@ def post_edit(request, username: str, post_id: int):
                 return redirect('post', username=username, post_id=post_id)
             return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
         return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
+    return redirect('post', username=username, post_id=post_id)
+
+
+@login_required
+def add_comment(request, username: str, post_id: int):
+    form = CommentForm(request.POST or None)
+    if request.method == 'POST':
+        if form.is_valid():
+            form.instance.post = Post.objects.select_related('author', 'group').get(id=post_id)
+            form.instance.author = request.user
+            form.save()
+            return redirect('post', username=username, post_id=post_id)
+        return redirect('post', username=username, post_id=post_id, form=form)
     return redirect('post', username=username, post_id=post_id)
 
 
