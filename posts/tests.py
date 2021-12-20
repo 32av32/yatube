@@ -1,9 +1,9 @@
 from django.urls import reverse
-
-from yatube import settings
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
 from .models import Group, Post
+from tempfile import TemporaryDirectory
+from django.core.cache import cache
 
 
 class TestPost(TestCase):
@@ -89,6 +89,7 @@ class TestPost(TestCase):
         ]
 
         for url in urls:
+            cache.clear()
             response = self.client.get(url)
             self.assertContains(response, 'new_text', msg_prefix=f'Edited text do not exist in url: {url}')
 
@@ -107,19 +108,26 @@ class TestPost(TestCase):
         self.assertEquals(response.status_code, 404, msg='response do not return 404 status code')
 
     def test_display_image(self):
-        from django.core.cache import cache
         cache.clear()
+        with TemporaryDirectory() as temp_directory:
 
-        with open(r'E:\practice\yatube\trash\image.jpg', 'rb') as img:
-            self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': img})
+            with override_settings(MEDIA_ROOT=temp_directory):
+                with open(r'E:\practice\yatube\trash\image.jpg', 'rb') as img:
+                    self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': img})
 
-            urls = [
-                reverse('index'),
-                reverse('group', kwargs={'slug': self.group_slug}),
-                reverse('profile', kwargs={'username': self.user.username}),
-                reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
-            ]
+                    urls = [
+                        reverse('index'),
+                        reverse('group', kwargs={'slug': self.group_slug}),
+                        reverse('profile', kwargs={'username': self.user.username}),
+                        reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
+                    ]
 
-            for url in urls:
-                response = self.client.get(url)
-                self.assertContains(response, '<img', msg_prefix=f'Image do not uploaded to url: {url}')
+                    for url in urls:
+                        response = self.client.get(url)
+                        self.assertContains(response, '<img', msg_prefix=f'Image do not uploaded to url: {url}')
+
+    def test_cache(self):
+        self.auth_client.get('/')
+        self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
+        response = self.auth_client.get('/')
+        self.assertNotContains(response, 'test_text', msg_prefix='Page do not must contain new post')
