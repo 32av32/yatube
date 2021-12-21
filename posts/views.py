@@ -1,82 +1,127 @@
-from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import render, get_object_or_404, redirect
-from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
-from django.views.decorators.cache import cache_page
-from .models import Post, Group
+from django.contrib.auth.mixins import LoginRequiredMixin, AccessMixin
+from django.urls import reverse
+from .models import Post, Group, Comment
 from .forms import PostForm, CommentForm
+from django.views.generic import (ListView, DetailView, CreateView, UpdateView)
 
 User = get_user_model()
 
 
-@cache_page(20, key_prefix='index_page')
-def index(request):
-    posts = Post.objects.all().select_related('author', 'group').order_by('-pub_date')
-    paginator = Paginator(posts, 10)
-    page = paginator.get_page(request.GET.get('page'))
-
-    return render(request, 'index.html', {'page': page, 'paginator': paginator})
-
-
-def group_posts(request, slug):
-    group = get_object_or_404(Group, slug=slug)
-    posts = Post.objects.filter(group=group).select_related('author').order_by('-pub_date')
-    paginator = Paginator(posts, 10)
-    page = paginator.get_page(request.GET.get('page'))
-    return render(request, 'group.html', {'group': group, 'page': page, 'paginator': paginator})
+class IndexView(ListView):
+    model = Post
+    queryset = Post.objects.all().select_related('author', 'group')
+    template_name = 'index.html'
+    paginate_by = 10
+    ordering = '-pub_date'
 
 
-def profile(request, username: str):
-    user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=user.pk).select_related('author', 'group').order_by('-pub_date')
-    paginator = Paginator(posts, 10)
-    page = paginator.get_page(request.GET.get('page'))
-    return render(request, 'profile.html', {'author': user, 'page': page, 'paginator': paginator})
+class GroupView(ListView):
+    model = Post
+    template_name = 'group.html'
+    paginate_by = 10
+    ordering = '-pub_date'
+
+    def get_queryset(self):
+        return Post.objects.filter(group__slug=self.kwargs['slug']).select_related('author', 'group')
+
+    def get_context_data(self, *, object_list=None, **kwargs):
+        group = get_object_or_404(Group, slug=self.kwargs['slug'])
+        context_data = super().get_context_data(object_list=object_list, **kwargs)
+        context_data['group'] = group
+        return context_data
 
 
-def post_view(request, username: str, post_id: int, form=CommentForm()):
-    post = get_object_or_404(User, username=username).posts.select_related('author', ).get(id=post_id)
-    comments = post.comments.select_related('author', ).all()
-    return render(request, 'post.html', {'post': post, 'comments': comments, 'form': form})
+class ProfileView(ListView):
+    model = Post
+    template_name = 'profile.html'
+    paginate_by = 10
+    ordering = '-pub_date'
+
+    def get_queryset(self):
+        return Post.objects.filter(author__username=self.kwargs['username']) \
+            .select_related('author', 'group')
+
+    @property
+    def extra_context(self):
+        return {'author': get_object_or_404(User, username=self.kwargs['username'])}
 
 
-@login_required
-def new_post(request):
-    form = PostForm(request.POST or None, files=request.FILES or None)
-    if request.method == 'POST':
-        if form.is_valid():
-            form.instance.author = request.user
-            form.save()
-            return redirect('index')
-        return render(request, 'new.html', {'form': form})
-    return render(request, 'new.html', {'form': form})
+class PostView(DetailView):
+    model = Post
+    queryset = Post.objects.select_related('author')
+    template_name = 'post.html'
+    pk_url_kwarg = 'post_id'
+    context_object_name = 'post'
+
+    def get_context_data(self, **kwargs):
+        context_data = super().get_context_data(**kwargs)
+        context_data['form'] = CommentForm()
+        return context_data
 
 
-@login_required
-def post_edit(request, username: str, post_id: int):
-    if username == request.user.username:
-        post = Post.objects.select_related('author', 'group').get(id=post_id)
-        form = PostForm(request.POST or None, files=request.FILES or None, instance=post)
-        if request.method == 'POST':
-            if form.is_valid():
-                form.save()
-                return redirect('post', username=username, post_id=post_id)
-            return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
-        return render(request, 'new.html', {'form': form, 'username': username, 'post': post})
-    return redirect('post', username=username, post_id=post_id)
+class NewPostView(LoginRequiredMixin, CreateView):
+    model = Post
+    form_class = PostForm
+    template_name = 'new.html'
+    success_url = '/'
+
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        form.save()
+        return super().form_valid(form)
 
 
-@login_required
-def add_comment(request, username: str, post_id: int):
-    form = CommentForm(request.POST or None)
-    if request.method == 'POST':
-        if form.is_valid():
-            form.instance.post = Post.objects.select_related('author', 'group').get(id=post_id)
-            form.instance.author = request.user
-            form.save()
-            return redirect('post', username=username, post_id=post_id)
-        return redirect('post', username=username, post_id=post_id, form=form)
-    return redirect('post', username=username, post_id=post_id)
+class PostEditView(LoginRequiredMixin, AccessMixin, UpdateView):
+    model = Post
+    pk_url_kwarg = 'post_id'
+    form_class = PostForm
+    template_name = 'new.html'
+    context_object_name = 'post'
+
+    def get_success_url(self):
+        return reverse('post',
+                       kwargs={
+                           'username': self.kwargs['username'],
+                           'post_id': self.kwargs['post_id'],
+                       })
+
+    @property
+    def extra_context(self):
+        return {'username': self.kwargs['username']}
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.username != self.kwargs['username']:
+            return HttpResponseNotAllowed(request.method, '<h1>You do not have access to the post</h1>')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class AddCommentView(LoginRequiredMixin, CreateView):
+    model = Comment
+    form_class = CommentForm
+    template_name = 'comments.html'
+
+    def form_valid(self, form):
+        form.instance.post = Post.objects.select_related('author', 'group').get(id=self.kwargs['post_id'])
+        form.instance.author = self.request.user
+        form.save()
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('post',
+                       kwargs={
+                           'username': self.kwargs['username'],
+                           'post_id': self.kwargs['post_id'],
+                       })
+
+    @property
+    def extra_context(self):
+        return {
+            'username': get_object_or_404(User, username=self.kwargs['username']),
+            'post_id': self.kwargs['post_id']
+        }
 
 
 def page_not_found(request, exception):

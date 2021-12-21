@@ -1,12 +1,20 @@
 from django.urls import path
 from . import views
+from django.views.decorators.cache import cache_page
+from .views import (IndexView,
+                    GroupView,
+                    ProfileView,
+                    PostView,
+                    NewPostView,
+                    PostEditView,
+                    AddCommentView)
 
 urlpatterns = [
-    path('', views.index, name='index'),
-    path('group/<slug:slug>/', views.group_posts, name='group'),
-    path('new/', views.new_post, name='new_post'),
-    path('<str:username>/', views.profile, name='profile'),
-    path('<str:username>/<int:post_id>/', views.post_view, name='post'),
-    path('<str:username>/<int:post_id>/edit/', views.post_edit, name='post_edit'),
-    path('<str:username>/<int:post_id>/comment/', views.add_comment, name='add_comment')
+    path('', cache_page(20)(IndexView.as_view()), name='index'),
+    path('group/<slug:slug>/', GroupView.as_view(), name='group'),
+    path('new/', NewPostView.as_view(), name='new_post'),
+    path('<str:username>/', ProfileView.as_view(), name='profile'),
+    path('<str:username>/<int:post_id>/', PostView.as_view(), name='post'),
+    path('<str:username>/<int:post_id>/edit/', PostEditView.as_view(), name='post_edit'),
+    path('<str:username>/<int:post_id>/comment/', AddCommentView.as_view(), name='add_comment')
 ]

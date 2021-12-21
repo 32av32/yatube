@@ -37,7 +37,7 @@
                 <!-- Вывод ленты записей -->
                 {% include "post_item.html" with post=post %}
             </div>
-            {% include 'comments.html' with post=post items=comments %}
+            {% include 'comments.html' with post=post items=post.comments.all %}
         </div>
     </div>
 </main>
