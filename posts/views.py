@@ -1,9 +1,10 @@
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, AccessMixin
 from django.urls import reverse
-from .models import Post, Group, Comment
+from .models import Post, Group, Comment, Follow
 from .forms import PostForm, CommentForm
 from django.views.generic import (ListView, DetailView, CreateView, UpdateView)
 
@@ -46,7 +47,10 @@ class ProfileView(ListView):
 
     @property
     def extra_context(self):
-        return {'author': get_object_or_404(User, username=self.kwargs['username'])}
+        return {
+            'author': get_object_or_404(User, username=self.kwargs['username']),
+            'following': Follow.objects.filter(author__username=self.kwargs['username'])
+        }
 
 
 class PostView(DetailView):
@@ -93,9 +97,11 @@ class PostEditView(LoginRequiredMixin, AccessMixin, UpdateView):
         return {'username': self.kwargs['username']}
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.username != self.kwargs['username']:
-            return HttpResponseNotAllowed(request.method, '<h1>You do not have access to the post</h1>')
-        return super().dispatch(request, *args, **kwargs)
+        if request.user.is_authenticated:
+            if request.user.username != self.kwargs['username']:
+                return HttpResponseNotAllowed(request.method, '<h1>You do not have access to the post</h1>')
+            return super().dispatch(request, *args, **kwargs)
+        return redirect('login')
 
 
 class AddCommentView(LoginRequiredMixin, CreateView):
@@ -122,6 +128,30 @@ class AddCommentView(LoginRequiredMixin, CreateView):
             'username': get_object_or_404(User, username=self.kwargs['username']),
             'post_id': self.kwargs['post_id']
         }
+
+
+class SubscriptionPostsView(LoginRequiredMixin, ListView):
+    model = Post
+    template_name = 'follow.html'
+    paginate_by = 10
+
+    def get_queryset(self):
+        posts = Post.objects.filter(author__following__user=self.request.user)
+        return posts
+
+
+@login_required
+def profile_follow(request, username):
+    author = get_object_or_404(User, username=username)
+    if request.user != author:
+        Follow.objects.get_or_create(user=request.user, author=author)
+    return redirect('profile', username=username)
+
+
+@login_required
+def profile_unfollow(request, username):
+    Follow.objects.get(author__username=username).delete()
+    return redirect('profile', username=username)
 
 
 def page_not_found(request, exception):

@@ -1,3 +1,7 @@
+import io
+
+from PIL import Image
+from django.core.files.base import ContentFile
 from django.urls import reverse
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
@@ -43,7 +47,7 @@ class TestPost(TestCase):
         self.assertRedirects(response=response, expected_url='/auth/login/?next=/new/', status_code=302,
                              target_status_code=200, fetch_redirect_response=True,
                              msg_prefix='Guest must be redirected to login page')
-        
+
     def test_available_new_for_auth_user(self):
         response = self.auth_client.get('/new/')
         self.assertEquals(response.status_code, 200, msg='page new unavailable for authorized user')
@@ -110,24 +114,70 @@ class TestPost(TestCase):
     def test_display_image(self):
         cache.clear()
         with TemporaryDirectory() as temp_directory:
-
             with override_settings(MEDIA_ROOT=temp_directory):
-                with open(r'E:\practice\yatube\trash\image.jpg', 'rb') as img:
-                    self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': img})
+                bytes_image = io.BytesIO()
+                im = Image.new('RGB', size=(1000, 1000), color=(255, 0, 0, 0))
+                im.save(bytes_image, format='jpeg')
+                bytes_image.seek(0)
+                image = ContentFile(bytes_image.read(), 'test.jpeg')
 
-                    urls = [
-                        reverse('index'),
-                        reverse('group', kwargs={'slug': self.group_slug}),
-                        reverse('profile', kwargs={'username': self.user.username}),
-                        reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
-                    ]
+                self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': image})
 
-                    for url in urls:
-                        response = self.client.get(url)
-                        self.assertContains(response, '<img', msg_prefix=f'Image do not uploaded to url: {url}')
+                urls = [
+                    reverse('index'),
+                    reverse('group', kwargs={'slug': self.group_slug}),
+                    reverse('profile', kwargs={'username': self.user.username}),
+                    reverse('post', kwargs={'username': self.user.username, 'post_id': 1})
+                ]
+
+                for url in urls:
+                    response = self.client.get(url)
+                    self.assertContains(response, '<img', msg_prefix=f'Image do not uploaded to url: {url}')
 
     def test_cache(self):
         self.auth_client.get('/')
         self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
         response = self.auth_client.get('/')
         self.assertNotContains(response, 'test_text', msg_prefix='Page do not must contain new post')
+
+    def test_follow_auth(self):
+        following = User.objects.create(username='author', password='12345', email='example@ex.com')
+        following.save()
+        urls = [
+            reverse('profile_follow', kwargs={'username': following.username}),
+            reverse('profile_unfollow', kwargs={'username': following.username}),
+        ]
+        for url in urls:
+            response = self.auth_client.get(url)
+            self.assertRedirects(response=response, expected_url=f'/{following.username}/', status_code=302,
+                                 target_status_code=200, fetch_redirect_response=True)
+
+    def test_post_comment(self):
+        self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
+        self.auth_client.post(
+            reverse('add_comment',
+                    kwargs={'username': self.user.username,
+                            'post_id': Post.objects.all().first().pk}),
+            data={'text': 'test_comment'})
+        response = self.auth_client.get(reverse('post', kwargs={'username': self.user.username,
+                                                                'post_id': Post.objects.all().first().pk}))
+        self.assertContains(response, 'test_comment')
+
+    def test_following_new_post(self):
+        following = User.objects.create(username='author', password='12345', email='example@ex.com')
+        following.save()
+        visiter = User.objects.create(username='visiter', password='12345', email='example@ex.com')
+        visiter.save()
+
+        self.auth_client.get(reverse('profile_follow', kwargs={'username': following.username}))
+
+        new_post = Post.objects.create(text='following_text', author=following)
+        new_post.save()
+
+        response = self.auth_client.get(reverse('follow_index'))
+        self.assertContains(response, 'following_text')
+
+        visiter_client = Client()
+        visiter_client.force_login(visiter)
+        response = visiter_client.get(reverse('follow_index'))
+        self.assertNotContains(response, 'following_text')
