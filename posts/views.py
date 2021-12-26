@@ -1,12 +1,13 @@
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseNotAllowed
+from django.urls import reverse_lazy
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, AccessMixin
 from django.urls import reverse
 from .models import Post, Group, Comment, Follow
 from .forms import PostForm, CommentForm
-from django.views.generic import (ListView, DetailView, CreateView, UpdateView)
+from django.views.generic import (ListView, DetailView, CreateView, UpdateView, DeleteView)
 
 User = get_user_model()
 
@@ -99,7 +100,23 @@ class PostEditView(LoginRequiredMixin, AccessMixin, UpdateView):
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             if request.user.username != self.kwargs['username']:
-                return HttpResponseNotAllowed(request.method, '<h1>You do not have access to the post</h1>')
+                return render(request, 'alert.html', {'message': 'У вас нет доступа на редактирование поста!'})
+            return super().dispatch(request, *args, **kwargs)
+        return redirect('login')
+
+
+class PostDeleteView(DeleteView):
+    model = Post
+    pk_url_kwarg = 'post_id'
+    template_name = 'delete_post.html'
+
+    def get_success_url(self):
+        return reverse_lazy('profile', kwargs={'username': self.kwargs['username']})
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            if request.user.username != self.kwargs['username']:
+                return render(request, 'alert.html', {'message': 'У вас нет доступа на удаление поста!'})
             return super().dispatch(request, *args, **kwargs)
         return redirect('login')
 

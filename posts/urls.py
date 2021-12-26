@@ -7,6 +7,7 @@ from .views import (IndexView,
                     PostView,
                     NewPostView,
                     PostEditView,
+                    PostDeleteView,
                     AddCommentView,
                     SubscriptionPostsView,)
 
@@ -20,5 +21,6 @@ urlpatterns = [
     path('<str:username>/', ProfileView.as_view(), name='profile'),
     path('<str:username>/<int:post_id>/', PostView.as_view(), name='post'),
     path('<str:username>/<int:post_id>/edit/', PostEditView.as_view(), name='post_edit'),
+    path('<str:username>/<int:post_id>/delete/', PostDeleteView.as_view(), name='post_delete'),
     path('<str:username>/<int:post_id>/comment/', AddCommentView.as_view(), name='add_comment'),
 ]
