@@ -26,49 +26,50 @@ class TestPost(TestCase):
         self.auth_client = Client()
         self.auth_client.login(username='testuser', password='12345')
 
-    def test_index_available(self):
-        response = self.client.get('/')
-        self.assertEquals(response.status_code, 200, msg='Index unavailable')
+    def test_get_index(self):
+        response = self.client.get(reverse('index'))
+        self.assertEquals(response.status_code, 200)
 
-    def test_group_post_available(self):
-        response = self.client.get(f'/group/{self.group_slug}/')
-        self.assertEquals(response.status_code, 200, msg='Group unavailable')
+    def test_get_group(self):
+        response = self.client.get(reverse('group', kwargs={'slug': self.group_slug}))
+        self.assertEquals(response.status_code, 200)
 
-    def test_group_incorrect(self):
+    def test_group_nonexist(self):
         response = self.client.get('/group/non-exist-group/')
-        self.assertEquals(response.status_code, 404, 'Status code must be 404 for Non-Exist-Group page')
+        self.assertEquals(response.status_code, 404)
 
     def test_nongroup(self):
         response = self.client.get('/group/')
-        self.assertEquals(response.status_code, 404, 'Status code must be 404 for Non-Group page')
+        self.assertEquals(response.status_code, 404)
 
     def test_redirect_guest_from_new(self):
-        response = self.client.get('/new/')
+        response = self.client.get(reverse('new_post'))
         self.assertRedirects(response=response, expected_url='/auth/login/?next=/new/', status_code=302,
-                             target_status_code=200, fetch_redirect_response=True,
-                             msg_prefix='Guest must be redirected to login page')
+                             target_status_code=200, fetch_redirect_response=True)
 
-    def test_available_new_for_auth_user(self):
-        response = self.auth_client.get('/new/')
-        self.assertEquals(response.status_code, 200, msg='page new unavailable for authorized user')
+    def test_get_new_for_auth_user(self):
+        response = self.auth_client.get(reverse('new_post'))
+        self.assertEquals(response.status_code, 200)
 
     def test_valid_form_new(self):
-        self.auth_client.post('/new/', {'text': 'test_text', 'group': self.group_id})
+        data = {'text': 'test_text', 'group': self.group_id}
+        self.auth_client.post(reverse('new_post'), data=data)
         post = Post.objects.filter(text='test_text', group=self.group_id)
         self.assertTrue(post.exists(), msg='Post not created')
 
     def test_invalid_form_new(self):
-        response = self.auth_client.post('/new/', data={'text': ''})
+        response = self.auth_client.post(reverse('new_post'), data={'text': ''})
         self.assertFormError(response, form='form', field='text', errors=['Обязательное поле.'])
 
     def test_create_profile(self):
-        self.client.post('auth/signup/',
-                         {'username': 'testuser', 'password': '12345', 'email': 'test@email.com'})
-        response = self.client.get('/testuser/')
-        self.assertEqual(response.status_code, 200, msg='Did not created profile page after registration')
+        data = {'username': 'testuser', 'password': '12345', 'email': 'test@email.com'}
+        self.client.post(reverse('signup'), data=data)
+        response = self.client.get(reverse('profile', kwargs={'username': self.user.username}))
+        self.assertEqual(response.status_code, 200)
 
     def test_existence_created_post(self):
-        self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
+        data = {'text': 'test_text', 'group': self.group_id, 'author': self.user}
+        self.auth_client.post(reverse('new_post'), data=data)
 
         urls = [
             reverse('index'),
@@ -82,8 +83,11 @@ class TestPost(TestCase):
             self.assertContains(response, 'test_text', msg_prefix=f'Created post do not exist in url: {url}')
 
     def test_post_edit_auth(self):
-        self.auth_client.post('/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
-        self.auth_client.post(f'/{self.user.username}/{1}/edit/', {'text': 'new_text', 'group': self.group_id})
+        data = {'text': 'test_text', 'group': self.group_id, 'author': self.user}
+        new_data = {'text': 'new_text', 'group': self.group_id}
+        self.auth_client.post(reverse('new_post'), data=data)
+        self.auth_client.post(reverse('post_edit',
+                                      kwargs={'username': self.user.username, 'post_id': 1}), data=new_data)
 
         urls = [
             reverse('index'),
@@ -98,18 +102,19 @@ class TestPost(TestCase):
             self.assertContains(response, 'new_text', msg_prefix=f'Edited text do not exist in url: {url}')
 
     def test_post_edit_guest(self):
-        response = self.client.get(f'/{self.user.username}/{1}/edit/')
-        self.assertRedirects(response=response, expected_url=f'/auth/login/?next=/{self.user.username}/{1}/edit/',
-                             status_code=302, target_status_code=200, fetch_redirect_response=True,
-                             msg_prefix='Guest must be redirected to login page')
-        self.client.post(f'/{self.user.username}/{1}/edit/', {'text': 'new_text'})
-        self.assertRedirects(response=response, expected_url=f'/auth/login/?next=/{self.user.username}/{1}/edit/',
-                             status_code=302, target_status_code=200, fetch_redirect_response=True,
-                             msg_prefix='Guest must be redirected to login page')
+        response = self.client.get(reverse('post_edit',
+                                           kwargs={'username': self.user.username, 'post_id': 1}))
+        self.assertRedirects(response=response, expected_url=f'/auth/login/',
+                             status_code=302, target_status_code=200, fetch_redirect_response=True)
+
+        self.client.post(reverse('post_edit',
+                                 kwargs={'username': self.user.username, 'post_id': 1}), data={'text': 'new_text'})
+        self.assertRedirects(response=response, expected_url=reverse('login'),
+                             status_code=302, target_status_code=200, fetch_redirect_response=True)
 
     def test_page_not_found(self):
         response = self.client.get('/none_exist_page/')
-        self.assertEquals(response.status_code, 404, msg='response do not return 404 status code')
+        self.assertEquals(response.status_code, 404)
 
     def test_display_image(self):
         cache.clear()
@@ -121,7 +126,8 @@ class TestPost(TestCase):
                 bytes_image.seek(0)
                 image = ContentFile(bytes_image.read(), 'test.jpeg')
 
-                self.auth_client.post('/new/', {'text': 'text', 'group': self.group_id, 'image': image})
+                data = {'text': 'text', 'group': self.group_id, 'image': image}
+                self.auth_client.post(reverse('new_post'), data=data)
 
                 urls = [
                     reverse('index'),
@@ -136,7 +142,8 @@ class TestPost(TestCase):
 
     def test_cache(self):
         self.auth_client.get('/')
-        self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
+        data = {'text': 'test_text', 'group': self.group_id, 'author': self.user}
+        self.auth_client.post(reverse('new_post'), data=data)
         response = self.auth_client.get('/')
         self.assertNotContains(response, 'test_text', msg_prefix='Page do not must contain new post')
 
@@ -149,11 +156,13 @@ class TestPost(TestCase):
         ]
         for url in urls:
             response = self.auth_client.get(url)
-            self.assertRedirects(response=response, expected_url=f'/{following.username}/', status_code=302,
+            self.assertRedirects(response=response,
+                                 expected_url=reverse('profile', kwargs={'username': following.username}), status_code=302,
                                  target_status_code=200, fetch_redirect_response=True)
 
     def test_post_comment(self):
-        self.auth_client.post(f'/new/', {'text': 'test_text', 'group': self.group_id, 'author': self.user})
+        data = {'text': 'test_text', 'group': self.group_id, 'author': self.user}
+        self.auth_client.post(reverse('new_post'), data=data)
         self.auth_client.post(
             reverse('add_comment',
                     kwargs={'username': self.user.username,

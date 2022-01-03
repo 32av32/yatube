@@ -1,5 +1,5 @@
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth import get_user_model
@@ -14,7 +14,7 @@ User = get_user_model()
 
 class IndexView(ListView):
     model = Post
-    queryset = Post.objects.all().select_related('author', 'group')
+    queryset = Post.objects.all().select_related('author', 'group').prefetch_related('comments')
     template_name = 'index.html'
     paginate_by = 10
     ordering = '-pub_date'
@@ -27,7 +27,8 @@ class GroupView(ListView):
     ordering = '-pub_date'
 
     def get_queryset(self):
-        return Post.objects.filter(group__slug=self.kwargs['slug']).select_related('author', 'group')
+        return Post.objects.filter(group__slug=self.kwargs['slug'])\
+            .select_related('author', 'group').prefetch_related('comments')
 
     def get_context_data(self, *, object_list=None, **kwargs):
         group = get_object_or_404(Group, slug=self.kwargs['slug'])
@@ -50,13 +51,13 @@ class ProfileView(ListView):
     def extra_context(self):
         return {
             'author': get_object_or_404(User, username=self.kwargs['username']),
-            'following': Follow.objects.filter(author__username=self.kwargs['username'])
+            'following': Follow.objects.filter(user=self.request.user).filter(author__username=self.kwargs['username'])
         }
 
 
 class PostView(DetailView):
     model = Post
-    queryset = Post.objects.select_related('author')
+    queryset = Post.objects.all().select_related('author', 'group').prefetch_related('comments')
     template_name = 'post.html'
     pk_url_kwarg = 'post_id'
     context_object_name = 'post'
@@ -161,13 +162,15 @@ class SubscriptionPostsView(LoginRequiredMixin, ListView):
 def profile_follow(request, username):
     author = get_object_or_404(User, username=username)
     if request.user != author:
+        print(f'author: {author}; user: {request.user}')
         Follow.objects.get_or_create(user=request.user, author=author)
     return redirect('profile', username=username)
 
 
 @login_required
 def profile_unfollow(request, username):
-    Follow.objects.get(author__username=username).delete()
+    author = get_object_or_404(User, username=username)
+    Follow.objects.get(user=request.user, author=author).delete()
     return redirect('profile', username=username)
 
 

@@ -1,6 +1,5 @@
 from django.contrib import admin
 from django.urls import path, include
-from yatube import settings
 from django.contrib.flatpages import views as fp_views
 from django.conf.urls import handler404, handler500
 from django.conf import settings
