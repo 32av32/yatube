@@ -49,9 +49,13 @@ class ProfileView(ListView):
 
     @property
     def extra_context(self):
+        if self.request.user.is_authenticated:
+            return {
+                'author': get_object_or_404(User, username=self.kwargs['username']),
+                'following': Follow.objects.filter(user=self.request.user).filter(author__username=self.kwargs['username'])
+            }
         return {
             'author': get_object_or_404(User, username=self.kwargs['username']),
-            'following': Follow.objects.filter(user=self.request.user).filter(author__username=self.kwargs['username'])
         }
 
 
